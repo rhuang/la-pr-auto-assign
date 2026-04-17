@@ -136,8 +136,12 @@ ${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
     reviewers:
 ${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
 load_repos:
-  - test-org/repo-a
-  - test-org/repo-b
+  - repo: test-org/repo-a
+    users:
+${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+  - repo: test-org/repo-b
+    users:
+${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
 `;
 
 function b64(s: string): string {

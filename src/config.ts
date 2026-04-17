@@ -4,6 +4,7 @@ import type {
   VerticalsConfig,
   VerticalEntry,
   AssignmentConfig,
+  LoadRepo,
 } from './types';
 
 const ERR_PREFIX = 'Invalid auto-assign config:';
@@ -15,7 +16,7 @@ const ERR_PREFIX = 'Invalid auto-assign config:';
  */
 const DEFAULT_ASSIGNMENT: Omit<AssignmentConfig, 'load_repos'> = {
   num_reviewers: 1,
-  load_window_days: 21,
+  load_window_days: 10,
   weights: {
     vertical_match: 5,
     recent_committer: 2,
@@ -59,16 +60,24 @@ function validateVerticals(raw: unknown): VerticalsConfig {
   };
 }
 
-function validateLoadRepos(raw: unknown): string[] {
-  if (!isStringArray(raw) || raw.length === 0) {
-    fail('load_repos must be a non-empty array of strings');
+function validateLoadRepos(raw: unknown): LoadRepo[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    fail('load_repos must be a non-empty array');
   }
-  for (const r of raw) {
-    if (!/^[^\s/]+\/[^\s/]+$/.test(r)) {
-      fail(`load_repos entry "${r}" must match "owner/repo"`);
+  const out: LoadRepo[] = [];
+  raw.forEach((entry, i) => {
+    const obj = asRecord(entry, `load_repos[${i}]`);
+    const repo = obj.repo;
+    if (typeof repo !== 'string' || !/^[^\s/]+\/[^\s/]+$/.test(repo)) {
+      fail(`load_repos[${i}].repo must be a string matching "owner/repo"`);
     }
-  }
-  return raw;
+    const users = obj.users;
+    if (!isStringArray(users) || users.length === 0) {
+      fail(`load_repos[${i}].users must be a non-empty array of strings`);
+    }
+    out.push({ repo, users });
+  });
+  return out;
 }
 
 function deriveWhitelist(verticals: VerticalsConfig): string[] {
