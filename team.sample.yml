@@ -30,5 +30,15 @@ verticals:
       - placeholder-user-4
 
 load_repos:
-  - owner/consumer-repo-a
-  - owner/consumer-repo-b
+  # Each repo carries its own user list — load is only counted from repos a
+  # given reviewer is listed under. Use this to keep FE-only reviewers from
+  # being credited for BE activity (and vice versa).
+  - repo: owner/consumer-repo-a
+    users:
+      - placeholder-user-1
+      - placeholder-user-2
+      - placeholder-user-3
+  - repo: owner/consumer-repo-b
+    users:
+      - placeholder-user-3
+      - placeholder-user-4

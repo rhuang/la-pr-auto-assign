@@ -27,30 +27,30 @@ function makeOctokit(
 }
 
 describe('buildSearchQuery', () => {
-  it('builds a single-qualifier review-requested query for 1 user, 2 repos, 21 days', () => {
+  it('builds a single-qualifier review-requested query for 1 user, 2 repos, 10 days', () => {
     const now = new Date('2026-04-16T10:00:00Z');
     const q = buildSearchQuery(
       'alice',
       'review-requested',
       ['test-org/repo-a', 'test-org/repo-b'],
-      21,
+      10,
       now,
     );
     expect(q).toBe(
-      'is:pr review-requested:alice created:>=2026-03-26 repo:test-org/repo-a repo:test-org/repo-b',
+      'is:pr review-requested:alice created:>=2026-04-06 repo:test-org/repo-a repo:test-org/repo-b',
     );
   });
 
   it('builds a single-qualifier reviewed-by query with the same shape', () => {
     const now = new Date('2026-04-16T10:00:00Z');
-    const q = buildSearchQuery('alice', 'reviewed-by', ['o/r'], 21, now);
-    expect(q).toBe('is:pr reviewed-by:alice created:>=2026-03-26 repo:o/r');
+    const q = buildSearchQuery('alice', 'reviewed-by', ['o/r'], 10, now);
+    expect(q).toBe('is:pr reviewed-by:alice created:>=2026-04-06 repo:o/r');
   });
 
   it('subtracts windowDays from now (YYYY-MM-DD)', () => {
     const now = new Date('2026-04-16T10:00:00Z');
-    const q = buildSearchQuery('bob', 'review-requested', ['o/r'], 21, now);
-    expect(q).toContain('created:>=2026-03-26');
+    const q = buildSearchQuery('bob', 'review-requested', ['o/r'], 10, now);
+    expect(q).toContain('created:>=2026-04-06');
   });
 });
 
@@ -75,8 +75,8 @@ describe('getLoadMap', () => {
 
     const result = await getLoadMap(octokit, {
       whitelist: ['alice', 'bob', 'carol'],
-      loadRepos: ['o/r'],
-      windowDays: 21,
+      loadRepos: [{ repo: 'o/r', users: ['alice', 'bob', 'carol'] }],
+      windowDays: 10,
     });
 
     expect(result).toEqual({ alice: 7, bob: 0, carol: 7 });
@@ -90,8 +90,8 @@ describe('getLoadMap', () => {
 
     await getLoadMap(octokit, {
       whitelist: users,
-      loadRepos: ['o/r'],
-      windowDays: 21,
+      loadRepos: [{ repo: 'o/r', users }],
+      windowDays: 10,
     });
 
     expect(issuesAndPullRequests).toHaveBeenCalledTimes(16);
@@ -110,22 +110,25 @@ describe('getLoadMap', () => {
 
     const result = await getLoadMap(octokit, {
       whitelist: ['bob'],
-      loadRepos: ['o/r'],
-      windowDays: 21,
+      loadRepos: [{ repo: 'o/r', users: ['bob'] }],
+      windowDays: 10,
     });
 
     expect(result).toEqual({ bob: 4 });
   });
 
-  it('issues one query per qualifier, each with a single qualifier and all repos', async () => {
+  it('issues one query per qualifier, each with a single qualifier and all the user-eligible repos', async () => {
     const { octokit, issuesAndPullRequests } = makeOctokit(async () => ({
       data: { total_count: 0 },
     }));
 
     await getLoadMap(octokit, {
       whitelist: ['alice'],
-      loadRepos: ['test-org/repo-a', 'test-org/repo-b'],
-      windowDays: 21,
+      loadRepos: [
+        { repo: 'test-org/repo-a', users: ['alice'] },
+        { repo: 'test-org/repo-b', users: ['alice'] },
+      ],
+      windowDays: 10,
     });
 
     expect(issuesAndPullRequests).toHaveBeenCalledTimes(2);
@@ -148,5 +151,46 @@ describe('getLoadMap', () => {
     }
     const args = issuesAndPullRequests.mock.calls[0]![0] as SearchArgs;
     expect(args.per_page).toBe(1);
+  });
+
+  it('only queries the repos a user is listed under (skips repos they cannot review)', async () => {
+    const { octokit, issuesAndPullRequests } = makeOctokit(async () => ({
+      data: { total_count: 1 },
+    }));
+
+    await getLoadMap(octokit, {
+      whitelist: ['alice'],
+      loadRepos: [
+        { repo: 'org/be-repo', users: ['bob'] },
+        { repo: 'org/fe-repo', users: ['alice'] },
+      ],
+      windowDays: 10,
+    });
+
+    expect(issuesAndPullRequests).toHaveBeenCalledTimes(2);
+    const qs = issuesAndPullRequests.mock.calls.map((c) => (c[0] as SearchArgs).q);
+    for (const q of qs) {
+      expect(q).toContain('repo:org/fe-repo');
+      expect(q).not.toContain('repo:org/be-repo');
+    }
+  });
+
+  it('skips API calls and returns 0 for users not listed in any load_repos entry', async () => {
+    const { octokit, issuesAndPullRequests } = makeOctokit(async () => ({
+      data: { total_count: 99 },
+    }));
+
+    const result = await getLoadMap(octokit, {
+      whitelist: ['alice', 'ghost'],
+      loadRepos: [{ repo: 'o/r', users: ['alice'] }],
+      windowDays: 10,
+    });
+
+    expect(result).toEqual({ alice: 198, ghost: 0 });
+    // Only the 2 alice queries — none for ghost.
+    expect(issuesAndPullRequests).toHaveBeenCalledTimes(2);
+    for (const call of issuesAndPullRequests.mock.calls) {
+      expect((call[0] as SearchArgs).q).toContain('alice');
+    }
   });
 });

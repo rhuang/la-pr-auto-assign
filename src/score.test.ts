@@ -24,8 +24,13 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     },
     assignment: {
       num_reviewers: 1,
-      load_window_days: 21,
-      load_repos: ['org/repo'],
+      load_window_days: 10,
+      load_repos: [
+        {
+          repo: 'org/repo',
+          users: ['alice', 'bob', 'carol', 'dave', 'eve', 'frank', 'george', 'harry'],
+        },
+      ],
       weights: {
         vertical_match: 5,
         recent_committer: 2,

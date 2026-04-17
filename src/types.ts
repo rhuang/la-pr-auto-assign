@@ -35,13 +35,26 @@ export interface AssignmentFallback {
   on_no_vertical: 'least_loaded';
 }
 
+/**
+ * One repo's contribution to the load search, plus the subset of users whose
+ * load should be counted against it. A user only appears in the load query
+ * for repos where they're listed in `users` — this lets FE-only reviewers
+ * skip BE repos and vice versa.
+ */
+export interface LoadRepo {
+  /** Format: "owner/repo". */
+  repo: string;
+  /** GitHub logins eligible to review in this repo. */
+  users: string[];
+}
+
 export interface AssignmentConfig {
   /** Number of reviewers to request. Currently locked to 1. */
   num_reviewers: number;
   /** Trailing window (days) used for both load calculation and committer lookups. */
   load_window_days: number;
-  /** Repos to include in load search queries. Format: "owner/repo". */
-  load_repos: string[];
+  /** Repos to include in load search queries, each with its own user whitelist. */
+  load_repos: LoadRepo[];
   weights: AssignmentWeights;
   fallback: AssignmentFallback;
 }

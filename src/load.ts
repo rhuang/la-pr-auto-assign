@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import type { getOctokit } from '@actions/github';
-import type { LoadMap } from './types';
+import type { LoadMap, LoadRepo } from './types';
 
 type Octokit = ReturnType<typeof getOctokit>;
 
@@ -11,8 +11,13 @@ const QUALIFIERS: readonly LoadQualifier[] = ['review-requested', 'reviewed-by']
 /**
  * Computes per-user review load across `loadRepos` over the last `windowDays` days.
  *
- * For each user in `whitelist`, issues two Search API calls — one per qualifier —
- * and sums their `total_count`s:
+ * Each `LoadRepo` carries its own user whitelist — a user only contributes load
+ * from repos where they're listed. This lets FE-only reviewers skip BE repos
+ * (and vice versa) instead of getting credited for activity in repos they never
+ * review.
+ *
+ * For each user in `whitelist`, builds the per-user repo subset, then issues
+ * two Search API calls — one per qualifier — and sums their `total_count`s:
  *   q = is:pr review-requested:USER created:>=YYYY-MM-DD repo:R1 repo:R2
  *   q = is:pr reviewed-by:USER     created:>=YYYY-MM-DD repo:R1 repo:R2
  *
@@ -21,6 +26,7 @@ const QUALIFIERS: readonly LoadQualifier[] = ['review-requested', 'reviewed-by']
  * qualifier succeeds alone.
  *
  * Returns { login -> total_count } including zero counts for users with no hits.
+ * Users not listed in any `loadRepos` entry get 0 without any API call.
  *
  * A sub-query failure is swallowed (logged via core.warning) and contributes 0
  * to that user's total, so a partial outage still lets the other qualifier count.
@@ -29,7 +35,7 @@ export async function getLoadMap(
   octokit: Octokit,
   params: {
     whitelist: string[];
-    loadRepos: string[];
+    loadRepos: LoadRepo[];
     windowDays: number;
   },
 ): Promise<LoadMap> {
@@ -37,10 +43,18 @@ export async function getLoadMap(
   const now = new Date();
 
   const entries = await Promise.all(
-    whitelist.map(async (user): Promise<[string, number, number[]]> => {
+    whitelist.map(async (user): Promise<[string, number, number[], string[]]> => {
+      const userRepos = loadRepos
+        .filter((lr) => lr.users.includes(user))
+        .map((lr) => lr.repo);
+
+      if (userRepos.length === 0) {
+        return [user, 0, [0, 0], []];
+      }
+
       const subTotals = await Promise.all(
         QUALIFIERS.map(async (qualifier) => {
-          const q = buildSearchQuery(user, qualifier, loadRepos, windowDays, now);
+          const q = buildSearchQuery(user, qualifier, userRepos, windowDays, now);
           try {
             const res = await octokit.rest.search.issuesAndPullRequests({
               q,
@@ -57,18 +71,22 @@ export async function getLoadMap(
           }
         }),
       );
-      return [user, subTotals.reduce((a, b) => a + b, 0), subTotals];
+      return [user, subTotals.reduce((a, b) => a + b, 0), subTotals, userRepos];
     }),
   );
 
   const map: LoadMap = {};
-  core.info(
-    `Load (window=${windowDays}d, repos=[${loadRepos.join(', ') || 'none'}]):`,
-  );
-  for (const [login, count, subTotals] of entries) {
+  core.info(`Load (window=${windowDays}d):`);
+  for (const [login, count, subTotals, userRepos] of entries) {
     map[login] = count;
+    if (userRepos.length === 0) {
+      core.info(`  ${login}: total=0 (not listed in any load_repos)`);
+      continue;
+    }
     const parts = QUALIFIERS.map((q, i) => `${q}=${subTotals[i]}`).join(', ');
-    core.info(`  ${login}: total=${count} (${parts})`);
+    core.info(
+      `  ${login}: total=${count} (${parts}) repos=[${userRepos.join(', ')}]`,
+    );
   }
   return map;
 }
