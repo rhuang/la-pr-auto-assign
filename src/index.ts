@@ -31,6 +31,25 @@ import { getRecentCommitters } from './committers';
 import { getLoadMap } from './load';
 import { pickReviewers } from './score';
 import { assignReviewers } from './assign';
+import type { AssignmentDecision } from './types';
+
+function logScoreBreakdown(decision: AssignmentDecision): void {
+  const label = decision.vertical ?? 'none (fallback)';
+  core.info(`Score breakdown (vertical=${label}):`);
+  if (decision.scored.length === 0) {
+    core.info('  (no candidates)');
+    return;
+  }
+  for (const c of decision.scored) {
+    const b = c.breakdown;
+    core.info(
+      `  ${c.login}: score=${c.score} (vertical=${b.verticalMatch}, ` +
+        `committer=+${b.committerBonus} [${b.committerFileCount} files], ` +
+        `load=-${b.loadPenalty} [${b.loadCount} prs], ` +
+        `inVertical=${b.inVertical})`,
+    );
+  }
+}
 
 /** Committer-signal lookback window. Separate from load window per plan §4. */
 const COMMITTER_WINDOW_DAYS = 90;
@@ -115,6 +134,8 @@ export async function run(): Promise<void> {
       committers,
       load,
     });
+
+    logScoreBreakdown(decision);
 
     if (decision.chosen.length === 0) {
       core.warning('No eligible reviewers found; nothing to assign.');

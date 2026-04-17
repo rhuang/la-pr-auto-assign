@@ -37,7 +37,7 @@ export async function getLoadMap(
   const now = new Date();
 
   const entries = await Promise.all(
-    whitelist.map(async (user): Promise<[string, number]> => {
+    whitelist.map(async (user): Promise<[string, number, number[]]> => {
       const subTotals = await Promise.all(
         QUALIFIERS.map(async (qualifier) => {
           const q = buildSearchQuery(user, qualifier, loadRepos, windowDays, now);
@@ -57,13 +57,18 @@ export async function getLoadMap(
           }
         }),
       );
-      return [user, subTotals.reduce((a, b) => a + b, 0)];
+      return [user, subTotals.reduce((a, b) => a + b, 0), subTotals];
     }),
   );
 
   const map: LoadMap = {};
-  for (const [login, count] of entries) {
+  core.info(
+    `Load (window=${windowDays}d, repos=[${loadRepos.join(', ') || 'none'}]):`,
+  );
+  for (const [login, count, subTotals] of entries) {
     map[login] = count;
+    const parts = QUALIFIERS.map((q, i) => `${q}=${subTotals[i]}`).join(', ');
+    core.info(`  ${login}: total=${count} (${parts})`);
   }
   return map;
 }

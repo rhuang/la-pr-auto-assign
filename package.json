@@ -24,13 +24,13 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.17.10",
+    "@types/node": "^24.0.0",
     "@vercel/ncc": "^0.38.3",
     "@vitest/coverage-v8": "^2.1.8",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }

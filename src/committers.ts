@@ -72,5 +72,17 @@ export async function getRecentCommitters(
       tally[login] = (tally[login] ?? 0) + 1;
     }
   }
+
+  core.info(
+    `Committers (window=${sinceDays}d, files=${limitedFiles.length}/${files.length}):`,
+  );
+  const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) {
+    core.info('  (no whitelisted committers matched)');
+  } else {
+    for (const [login, count] of sorted) {
+      core.info(`  ${login}: ${count} files`);
+    }
+  }
   return tally;
 }
