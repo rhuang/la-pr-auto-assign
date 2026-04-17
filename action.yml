@@ -1,0 +1,32 @@
+name: 'Auto-assign PR Reviewer'
+description: 'Auto-assign a PR reviewer based on vertical (LLM-classified), recent committers, and current review load.'
+author: 'legalatoms'
+branding:
+  icon: 'user-check'
+  color: 'purple'
+inputs:
+  anthropic-api-key:
+    description: 'Anthropic API key used to classify the PR vertical via Claude Haiku.'
+    required: true
+  config-repo:
+    description: 'owner/repo containing the team config YAML (typically a private repo so the reviewer roster is not public). The load-token must be able to read this repo.'
+    required: true
+  config-path:
+    description: 'Path to the config YAML inside config-repo.'
+    required: false
+    default: 'team.yml'
+  config-ref:
+    description: 'Branch, tag, or SHA of config-repo to read. Defaults to the default branch.'
+    required: false
+    default: ''
+  load-token:
+    description: 'GitHub token used for config-repo reads, load-repo Search API calls, and other read operations. In practice this should be a classic PAT with repo scope that can read config-repo, each load_repos entry, and the current consumer repo. Falls back to github-token if not provided, but cross-repo access typically requires the PAT.'
+    required: false
+    default: ''
+  github-token:
+    description: 'GitHub token used to read the PR and assign reviewers. Defaults to the workflow token.'
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

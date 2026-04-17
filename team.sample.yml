@@ -1,0 +1,34 @@
+# Sample team config.
+#
+# The real roster lives in a separate private repo passed to the action via
+# the `config-repo` input. Copy this file there as `team.yml`, fill in the
+# real values, and use a classic `repo`-scoped PAT for `load-token` that can
+# read this repo, each repo listed in `load_repos`, and the current consumer repo.
+#
+# Only two top-level fields are accepted: verticals, load_repos.
+# The candidate pool is derived as the union of all vertical reviewer lists —
+# every reviewer must appear in at least one vertical.
+#
+# Algorithm tuning (num_reviewers, load_window_days, weights, fallback) is
+# baked into the action — edit DEFAULT_ASSIGNMENT in src/config.ts and bump
+# the tag to change it.
+#
+# Placeholder handles below — safe to keep in this public action repo.
+
+verticals:
+  Professional:
+    reviewers:
+      - placeholder-user-1
+      - placeholder-user-2
+  Client:
+    reviewers:
+      - placeholder-user-3
+      - placeholder-user-4
+  Designer:
+    reviewers:
+      - placeholder-user-3
+      - placeholder-user-4
+
+load_repos:
+  - owner/consumer-repo-a
+  - owner/consumer-repo-b

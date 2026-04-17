@@ -1,0 +1,36 @@
+{
+  "name": "la-pr-auto-assign",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action that auto-assigns PR reviewers based on vertical classification, recent committers, and current review load.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/legalatoms/la-pr-auto-assign.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.17.10",
+    "@vercel/ncc": "^0.38.3",
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
