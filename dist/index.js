@@ -40123,7 +40123,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fetchConfigYaml = fetchConfigYaml;
 /**
  * Fetch the raw YAML string for the config file from a (typically private) repo.
- * The caller must pass an octokit built from a token with `Contents: Read` on that repo.
+ * The caller must pass an octokit built from a token that can read that repo.
  *
  * `repoSpec` format: `owner/repo`.
  * `path` is the file path inside the repo (e.g. `auto-assign.yml`).
@@ -40177,8 +40177,10 @@ async function fetchConfigYaml(octokit, params) {
  * The action uses up to two tokens:
  *   - github-token  (workflow token, has pull-requests: write) — used for write ops
  *                   (requestReviewers, createComment) and same-repo reads.
- *   - load-token    (optional PAT) — used for cross-repo Search API and for reading
- *                   cross-repo linked issues. Falls back to github-token.
+ *   - load-token    (optional PAT) — used for read operations. In the current
+ *                   implementation this should be a classic PAT with `repo`
+ *                   scope that can read the config repo, any `load_repos`, and
+ *                   the current consumer repo. Falls back to github-token.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -40354,37 +40356,45 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getLoadMap = getLoadMap;
 exports.buildSearchQuery = buildSearchQuery;
 const core = __importStar(__nccwpck_require__(7484));
+const QUALIFIERS = ['review-requested', 'reviewed-by'];
 /**
  * Computes per-user review load across `loadRepos` over the last `windowDays` days.
  *
- * For each user in `whitelist`, issues one Search API call:
- *   q = is:pr (review-requested:USER OR reviewed-by:USER) created:>=YYYY-MM-DD repo:R1 repo:R2
+ * For each user in `whitelist`, issues two Search API calls — one per qualifier —
+ * and sums their `total_count`s:
+ *   q = is:pr review-requested:USER created:>=YYYY-MM-DD repo:R1 repo:R2
+ *   q = is:pr reviewed-by:USER     created:>=YYYY-MM-DD repo:R1 repo:R2
+ *
+ * The OR compound `(review-requested:X OR reviewed-by:X)` is avoided: Search
+ * rejects it with 422 "users cannot be searched" for some logins even when each
+ * qualifier succeeds alone.
  *
  * Returns { login -> total_count } including zero counts for users with no hits.
  *
- * Errors on a single user's query are swallowed (logged via core.warning) and that user gets load=0,
- * which is actually pessimistic against the action's goals (they'll appear preferred) — so we also
- * record to a debug log. Don't fail the whole action.
+ * A sub-query failure is swallowed (logged via core.warning) and contributes 0
+ * to that user's total, so a partial outage still lets the other qualifier count.
  */
 async function getLoadMap(octokit, params) {
     const { whitelist, loadRepos, windowDays } = params;
     const now = new Date();
     const entries = await Promise.all(whitelist.map(async (user) => {
-        const q = buildSearchQuery(user, loadRepos, windowDays, now);
-        try {
-            const res = await octokit.rest.search.issuesAndPullRequests({
-                q,
-                per_page: 1,
-            });
-            const total = res.data?.total_count ?? 0;
-            return [user, total];
-        }
-        catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            core.warning(`load search failed for user "${user}": ${msg}`);
-            core.debug(`failed query was: ${q}`);
-            return [user, 0];
-        }
+        const subTotals = await Promise.all(QUALIFIERS.map(async (qualifier) => {
+            const q = buildSearchQuery(user, qualifier, loadRepos, windowDays, now);
+            try {
+                const res = await octokit.rest.search.issuesAndPullRequests({
+                    q,
+                    per_page: 1,
+                });
+                return res.data?.total_count ?? 0;
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                core.warning(`load search failed for user "${user}" (${qualifier}): ${msg}`);
+                core.debug(`failed query was: ${q}`);
+                return 0;
+            }
+        }));
+        return [user, subTotals.reduce((a, b) => a + b, 0)];
     }));
     const map = {};
     for (const [login, count] of entries) {
@@ -40396,16 +40406,16 @@ async function getLoadMap(octokit, params) {
  * Builds the GitHub Search API query string used by `getLoadMap`.
  *
  * Exported for unit testing. Format:
- *   `is:pr (review-requested:USER OR reviewed-by:USER) created:>=YYYY-MM-DD repo:R1 repo:R2`
+ *   `is:pr <qualifier>:USER created:>=YYYY-MM-DD repo:R1 repo:R2`
  *
  * The date is `now - windowDays` days, formatted `YYYY-MM-DD` (UTC date only).
  */
-function buildSearchQuery(user, loadRepos, windowDays, now = new Date()) {
+function buildSearchQuery(user, qualifier, loadRepos, windowDays, now = new Date()) {
     const since = new Date(now.getTime() - windowDays * 86400_000);
     const dateStr = since.toISOString().slice(0, 10);
     const parts = [
         'is:pr',
-        `(review-requested:${user} OR reviewed-by:${user})`,
+        `${qualifier}:${user}`,
         `created:>=${dateStr}`,
     ];
     if (loadRepos.length > 0) {

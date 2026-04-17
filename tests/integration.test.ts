@@ -322,10 +322,10 @@ describe('integration: run()', () => {
     expect(call.model).toBe('claude-haiku-4-5-20251001');
   });
 
-  it('makes one Search API call per whitelist member', async () => {
+  it('makes two Search API calls per whitelist member (one per qualifier)', async () => {
     const { run } = await import('../src/index');
     await run();
 
-    expect(mocks.mockSearch).toHaveBeenCalledTimes(ALL_WHITELIST.length);
+    expect(mocks.mockSearch).toHaveBeenCalledTimes(ALL_WHITELIST.length * 2);
   });
 });
