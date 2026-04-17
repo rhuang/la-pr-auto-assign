@@ -40,6 +40,14 @@ export function buildUserMessage(prContext: PRContext): string {
 
 const VALID_VERTICALS: ReadonlySet<string> = new Set<string>([...VERTICALS, 'None']);
 
+// Haiku sometimes wraps JSON in a ```json ... ``` fence despite being told not to.
+// Strip a leading/trailing fence (with optional language tag) before parsing.
+function stripCodeFence(s: string): string {
+  const trimmed = s.trim();
+  const match = trimmed.match(/^```(?:[a-zA-Z0-9_-]+)?\s*\n?([\s\S]*?)\n?```$/);
+  return match ? match[1].trim() : trimmed;
+}
+
 /**
  * Classify the PR into one vertical (Professional | Client | Designer) or return null.
  *
@@ -72,7 +80,7 @@ export async function classifyVertical(
       return null;
     }
 
-    const text = block.text.trim();
+    const text = stripCodeFence(block.text);
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
