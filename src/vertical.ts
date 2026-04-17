@@ -4,6 +4,7 @@ import { VERTICALS, type PRContext, type Vertical } from './types';
 
 const MODEL_ID = 'claude-haiku-4-5-20251001';
 const BODY_TRUNCATE_BYTES = 2048;
+const MAX_TOKENS = 100;
 
 export const VERTICAL_SYSTEM_PROMPT = `You classify pull requests into one of three verticals based on which user-facing product surface they primarily affect:
 - Professional: features for the legal professional / attorney user (case management, client queues, questionnaires from the pro side)
@@ -40,12 +41,16 @@ export function buildUserMessage(prContext: PRContext): string {
 
 const VALID_VERTICALS: ReadonlySet<string> = new Set<string>([...VERTICALS, 'None']);
 
-// Haiku sometimes wraps JSON in a ```json ... ``` fence despite being told not to.
-// Strip a leading/trailing fence (with optional language tag) before parsing.
-function stripCodeFence(s: string): string {
+// Haiku sometimes wraps JSON in a ```json fence or prefixes it with commentary,
+// and with a tight max_tokens the closing fence can be truncated. Extract the
+// first {...} object from anywhere in the response instead of relying on
+// matched fences.
+function extractJson(s: string): string {
   const trimmed = s.trim();
-  const match = trimmed.match(/^```(?:[a-zA-Z0-9_-]+)?\s*\n?([\s\S]*?)\n?```$/);
-  return match ? match[1].trim() : trimmed;
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
+  if (first === -1 || last === -1 || last < first) return trimmed;
+  return trimmed.slice(first, last + 1);
 }
 
 /**
@@ -67,7 +72,7 @@ export async function classifyVertical(
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: MODEL_ID,
-      max_tokens: 50,
+      max_tokens: MAX_TOKENS,
       system: VERTICAL_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildUserMessage(prContext) }],
     });
@@ -80,7 +85,7 @@ export async function classifyVertical(
       return null;
     }
 
-    const text = stripCodeFence(block.text);
+    const text = extractJson(block.text);
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
