@@ -39964,6 +39964,16 @@ async function getRecentCommitters(octokit, params) {
             tally[login] = (tally[login] ?? 0) + 1;
         }
     }
+    core.info(`Committers (window=${sinceDays}d, files=${limitedFiles.length}/${files.length}):`);
+    const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+    if (sorted.length === 0) {
+        core.info('  (no whitelisted committers matched)');
+    }
+    else {
+        for (const [login, count] of sorted) {
+            core.info(`  ${login}: ${count} files`);
+        }
+    }
     return tally;
 }
 
@@ -40227,6 +40237,21 @@ const committers_1 = __nccwpck_require__(8098);
 const load_1 = __nccwpck_require__(259);
 const score_1 = __nccwpck_require__(9);
 const assign_1 = __nccwpck_require__(1074);
+function logScoreBreakdown(decision) {
+    const label = decision.vertical ?? 'none (fallback)';
+    core.info(`Score breakdown (vertical=${label}):`);
+    if (decision.scored.length === 0) {
+        core.info('  (no candidates)');
+        return;
+    }
+    for (const c of decision.scored) {
+        const b = c.breakdown;
+        core.info(`  ${c.login}: score=${c.score} (vertical=${b.verticalMatch}, ` +
+            `committer=+${b.committerBonus} [${b.committerFileCount} files], ` +
+            `load=-${b.loadPenalty} [${b.loadCount} prs], ` +
+            `inVertical=${b.inVertical})`);
+    }
+}
 /** Committer-signal lookback window. Separate from load window per plan §4. */
 const COMMITTER_WINDOW_DAYS = 90;
 async function run() {
@@ -40294,6 +40319,7 @@ async function run() {
             committers,
             load,
         });
+        logScoreBreakdown(decision);
         if (decision.chosen.length === 0) {
             core.warning('No eligible reviewers found; nothing to assign.');
             return;
@@ -40394,11 +40420,14 @@ async function getLoadMap(octokit, params) {
                 return 0;
             }
         }));
-        return [user, subTotals.reduce((a, b) => a + b, 0)];
+        return [user, subTotals.reduce((a, b) => a + b, 0), subTotals];
     }));
     const map = {};
-    for (const [login, count] of entries) {
+    core.info(`Load (window=${windowDays}d, repos=[${loadRepos.join(', ') || 'none'}]):`);
+    for (const [login, count, subTotals] of entries) {
         map[login] = count;
+        const parts = QUALIFIERS.map((q, i) => `${q}=${subTotals[i]}`).join(', ');
+        core.info(`  ${login}: total=${count} (${parts})`);
     }
     return map;
 }
