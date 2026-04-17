@@ -62,6 +62,12 @@ export interface AssignmentConfig {
 export interface Config {
   whitelist: string[];
   verticals: VerticalsConfig;
+  /**
+   * GitHub logins whose PRs should be skipped entirely — no reviewer will be
+   * assigned when they open a PR. Matched case-insensitively against the PR
+   * author. Always an array; empty when the field is omitted.
+   */
+  ignore_authors: string[];
   assignment: AssignmentConfig;
 }
 

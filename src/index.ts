@@ -107,6 +107,16 @@ export async function run(): Promise<void> {
       repo: ctx.repo.repo,
       number: prNumber,
     });
+
+    const ignoredAuthor = config.ignore_authors.find(
+      (login) => login.toLowerCase() === prContext.author.toLowerCase(),
+    );
+    if (ignoredAuthor) {
+      core.info(
+        `Skipping: PR author @${prContext.author} is in ignore_authors.`,
+      );
+      return;
+    }
     const linkedRef = prContext.linkedIssue
       ? `${prContext.linkedIssue.ref.owner}/${prContext.linkedIssue.ref.repo}#${prContext.linkedIssue.ref.number}`
       : 'none';

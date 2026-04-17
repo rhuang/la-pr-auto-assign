@@ -22,6 +22,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
       Client: { reviewers: ['eve', 'frank', 'george', 'harry'] },
       Designer: { reviewers: ['eve', 'frank', 'george', 'harry'] },
     },
+    ignore_authors: [],
     assignment: {
       num_reviewers: 1,
       load_window_days: 10,
