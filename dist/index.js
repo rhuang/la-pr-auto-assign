@@ -40822,6 +40822,13 @@ function buildUserMessage(prContext) {
     return parts.join('\n\n');
 }
 const VALID_VERTICALS = new Set([...types_1.VERTICALS, 'None']);
+// Haiku sometimes wraps JSON in a ```json ... ``` fence despite being told not to.
+// Strip a leading/trailing fence (with optional language tag) before parsing.
+function stripCodeFence(s) {
+    const trimmed = s.trim();
+    const match = trimmed.match(/^```(?:[a-zA-Z0-9_-]+)?\s*\n?([\s\S]*?)\n?```$/);
+    return match ? match[1].trim() : trimmed;
+}
 /**
  * Classify the PR into one vertical (Professional | Client | Designer) or return null.
  *
@@ -40847,7 +40854,7 @@ async function classifyVertical(apiKey, prContext) {
             core.warning(`classifyVertical: unexpected response shape (no text block) for PR #${prContext.number}`);
             return null;
         }
-        const text = block.text.trim();
+        const text = stripCodeFence(block.text);
         let parsed;
         try {
             parsed = JSON.parse(text);

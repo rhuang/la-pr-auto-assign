@@ -66,6 +66,20 @@ describe('classifyVertical', () => {
     expect(result).toBeNull();
   });
 
+  it('parses JSON wrapped in a ```json code fence', async () => {
+    mockCreate.mockResolvedValueOnce(
+      textResponse('```json\n{"vertical":"Professional"}\n```'),
+    );
+    const result = await classifyVertical('fake-key', makePRContext());
+    expect(result).toBe('Professional');
+  });
+
+  it('parses JSON wrapped in a bare ``` code fence', async () => {
+    mockCreate.mockResolvedValueOnce(textResponse('```\n{"vertical":"Client"}\n```'));
+    const result = await classifyVertical('fake-key', makePRContext());
+    expect(result).toBe('Client');
+  });
+
   it('returns null when SDK returns unparseable text', async () => {
     mockCreate.mockResolvedValueOnce(textResponse("I think it's Professional"));
     const result = await classifyVertical('fake-key', makePRContext());
