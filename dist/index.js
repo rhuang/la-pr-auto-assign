@@ -40067,6 +40067,14 @@ function validateVerticals(raw) {
         Designer: validateVerticalEntry(v.Designer, 'Designer'),
     };
 }
+function validateIgnoreAuthors(raw) {
+    if (raw === undefined || raw === null)
+        return [];
+    if (!isStringArray(raw)) {
+        fail('ignore_authors must be an array of strings');
+    }
+    return raw;
+}
 function validateLoadRepos(raw) {
     if (!Array.isArray(raw) || raw.length === 0) {
         fail('load_repos must be a non-empty array');
@@ -40102,9 +40110,10 @@ function deriveWhitelist(verticals) {
 /**
  * Parse and validate a team-config YAML string.
  *
- * Accepted top-level fields: `verticals`, `load_repos`. The candidate pool
- * (a.k.a. whitelist) is derived as the union of all vertical reviewer lists —
- * so every reviewer must belong to at least one vertical.
+ * Accepted top-level fields: `verticals`, `load_repos`, `ignore_authors`
+ * (optional). The candidate pool (a.k.a. whitelist) is derived as the union
+ * of all vertical reviewer lists — so every reviewer must belong to at least
+ * one vertical.
  */
 function parseConfig(yamlString) {
     let parsed;
@@ -40121,10 +40130,12 @@ function parseConfig(yamlString) {
     const root = parsed;
     const verticals = validateVerticals(root.verticals);
     const load_repos = validateLoadRepos(root.load_repos);
+    const ignore_authors = validateIgnoreAuthors(root.ignore_authors);
     const whitelist = deriveWhitelist(verticals);
     return {
         whitelist,
         verticals,
+        ignore_authors,
         assignment: { ...DEFAULT_ASSIGNMENT, load_repos },
     };
 }
@@ -40304,6 +40315,11 @@ async function run() {
             repo: ctx.repo.repo,
             number: prNumber,
         });
+        const ignoredAuthor = config.ignore_authors.find((login) => login.toLowerCase() === prContext.author.toLowerCase());
+        if (ignoredAuthor) {
+            core.info(`Skipping: PR author @${prContext.author} is in ignore_authors.`);
+            return;
+        }
         const linkedRef = prContext.linkedIssue
             ? `${prContext.linkedIssue.ref.owner}/${prContext.linkedIssue.ref.repo}#${prContext.linkedIssue.ref.number}`
             : 'none';

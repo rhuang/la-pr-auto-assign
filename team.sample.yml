@@ -5,7 +5,7 @@
 # real values, and use a classic `repo`-scoped PAT for `load-token` that can
 # read this repo, each repo listed in `load_repos`, and the current consumer repo.
 #
-# Only two top-level fields are accepted: verticals, load_repos.
+# Top-level fields: verticals, load_repos, ignore_authors (optional).
 # The candidate pool is derived as the union of all vertical reviewer lists —
 # every reviewer must appear in at least one vertical.
 #
@@ -28,6 +28,13 @@ verticals:
     reviewers:
       - placeholder-user-3
       - placeholder-user-4
+
+# PR authors in this list are opted out of auto-assignment — when they open a
+# PR, the action logs and exits without requesting any reviewer. Match is
+# case-insensitive. Optional; omit the field to disable.
+ignore_authors:
+  - dependabot[bot]
+  - placeholder-bot-user
 
 load_repos:
   # Each repo carries its own user list — load is only counted from repos a

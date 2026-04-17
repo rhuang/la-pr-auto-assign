@@ -307,6 +307,20 @@ describe('integration: run()', () => {
     expect(call.reviewers[0]).toBe('prof-b');
   });
 
+  it('skips assignment when PR author is in ignore_authors (case-insensitive)', async () => {
+    const ignoreYaml = CONFIG_YAML + '\nignore_authors:\n  - NewDev\n';
+    mocks.mockGetContent.mockResolvedValue({
+      data: { type: 'file', encoding: 'base64', content: b64(ignoreYaml) },
+    });
+
+    const { run } = await import('../src/index');
+    await run();
+
+    expect(mocks.mockRequestReviewers).not.toHaveBeenCalled();
+    expect(mocks.mockCreateComment).not.toHaveBeenCalled();
+    // Author was `newdev` (from setDefaultPREventFixtures) — case should not matter.
+  });
+
   it('skips with an info log when event is not pull_request', async () => {
     mocks.mockContext.eventName = 'push';
 

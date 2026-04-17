@@ -94,6 +94,22 @@ load_repos:
     expect(() => parseConfig(bad)).toThrow(/load_repos\[0\]\.users/);
   });
 
+  it('defaults ignore_authors to an empty array when omitted', () => {
+    const cfg = parseConfig(VALID_YAML);
+    expect(cfg.ignore_authors).toEqual([]);
+  });
+
+  it('parses ignore_authors when present', () => {
+    const withIgnore = VALID_YAML + '\nignore_authors:\n  - dependabot[bot]\n  - renovate\n';
+    const cfg = parseConfig(withIgnore);
+    expect(cfg.ignore_authors).toEqual(['dependabot[bot]', 'renovate']);
+  });
+
+  it('rejects ignore_authors that is not an array of strings', () => {
+    const bad = VALID_YAML + '\nignore_authors:\n  foo: bar\n';
+    expect(() => parseConfig(bad)).toThrow(/ignore_authors.*array of strings/);
+  });
+
   it('rejects malformed YAML', () => {
     expect(() =>
       parseConfig('verticals: :\n  bad: ['),
