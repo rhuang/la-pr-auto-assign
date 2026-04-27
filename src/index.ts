@@ -94,10 +94,25 @@ export async function run(): Promise<void> {
     });
     const config = parseConfig(configYaml);
 
+    const currentRepoSpec = `${ctx.repo.owner}/${ctx.repo.repo}`;
+    const eligibleLogins = config.assignment.load_repos.find(
+      (lr) => lr.repo === currentRepoSpec,
+    )?.users;
+    if (eligibleLogins) {
+      core.info(
+        `Eligible reviewers for ${currentRepoSpec}: ${eligibleLogins.join(', ')}`,
+      );
+    } else {
+      core.warning(
+        `Current repo ${currentRepoSpec} is not listed in load_repos; falling back to full whitelist for eligibility.`,
+      );
+    }
+
     // Load-map search has no PR-context dependency, so kick it off as soon as config
-    // is parsed and let it race the PR / file fetches.
+    // is parsed and let it race the PR / file fetches. Narrowing to eligibleLogins
+    // (when known) saves Search API calls for users who can't be picked anyway.
     const loadPromise = getLoadMap(readOctokit, {
-      whitelist: config.whitelist,
+      whitelist: eligibleLogins ?? config.whitelist,
       loadRepos: config.assignment.load_repos,
       windowDays: config.assignment.load_window_days,
     });
@@ -143,6 +158,7 @@ export async function run(): Promise<void> {
       vertical,
       committers,
       load,
+      eligibleLogins,
     });
 
     logScoreBreakdown(decision);

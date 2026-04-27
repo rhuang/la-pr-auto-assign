@@ -36,10 +36,11 @@ export interface AssignmentFallback {
 }
 
 /**
- * One repo's contribution to the load search, plus the subset of users whose
- * load should be counted against it. A user only appears in the load query
- * for repos where they're listed in `users` — this lets FE-only reviewers
- * skip BE repos and vice versa.
+ * One repo plus the GitHub logins associated with it. The `users` list serves
+ * two purposes: (1) load-counting — a user only appears in the load search
+ * for repos where they're listed; (2) eligibility — when a PR is opened in
+ * this repo, only listed users can be picked as reviewers. A user not listed
+ * for a given repo therefore neither reviews PRs there nor accrues load from it.
  */
 export interface LoadRepo {
   /** Format: "owner/repo". */
@@ -117,6 +118,12 @@ export interface ScoreInput {
   vertical: Vertical | null;
   committers: CommitterMap;
   load: LoadMap;
+  /**
+   * If provided, the candidate pool is restricted to whitelist members who
+   * also appear here. Used to gate eligibility per current repo (the matching
+   * `load_repos[i].users` list). Omit to consider the full whitelist.
+   */
+  eligibleLogins?: string[];
 }
 
 export interface ScoreBreakdown {

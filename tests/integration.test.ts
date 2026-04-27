@@ -124,7 +124,10 @@ const CLIENT_REVIEWERS = [
 ];
 const ALL_WHITELIST = [...PROFESSIONAL_REVIEWERS, ...CLIENT_REVIEWERS];
 
-const CONFIG_YAML = `
+function makeConfigYaml(opts: { repoAUsers?: string[]; repoBUsers?: string[] } = {}): string {
+  const repoAUsers = opts.repoAUsers ?? ALL_WHITELIST;
+  const repoBUsers = opts.repoBUsers ?? ALL_WHITELIST;
+  return `
 verticals:
   Professional:
     reviewers:
@@ -138,11 +141,14 @@ ${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
 load_repos:
   - repo: test-org/repo-a
     users:
-${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+${repoAUsers.map((u) => `      - ${u}`).join('\n')}
   - repo: test-org/repo-b
     users:
-${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+${repoBUsers.map((u) => `      - ${u}`).join('\n')}
 `;
+}
+
+const CONFIG_YAML = makeConfigYaml();
 
 function b64(s: string): string {
   return Buffer.from(s, 'utf8').toString('base64');
@@ -345,5 +351,39 @@ describe('integration: run()', () => {
     await run();
 
     expect(mocks.mockSearch).toHaveBeenCalledTimes(ALL_WHITELIST.length * 2);
+  });
+
+  it('restricts candidates to current repo\'s load_repos[].users list', async () => {
+    const REPO_A_USERS = ['prof-c', 'prof-d'];
+    mocks.mockGetContent.mockResolvedValue({
+      data: {
+        type: 'file',
+        encoding: 'base64',
+        content: b64(makeConfigYaml({ repoAUsers: REPO_A_USERS })),
+      },
+    });
+
+    const { run } = await import('../src/index');
+    await run();
+
+    const call = mocks.mockRequestReviewers.mock.calls[0][0];
+    expect(REPO_A_USERS).toContain(call.reviewers[0]);
+  });
+
+  it('warns and falls back to full whitelist when current repo not in load_repos', async () => {
+    mocks.mockContext.repo = { owner: 'test-org', repo: 'unlisted-repo' };
+
+    const core = await import('@actions/core');
+    const warningSpy = vi.mocked(core.warning);
+
+    const { run } = await import('../src/index');
+    await run();
+
+    expect(mocks.mockRequestReviewers).toHaveBeenCalledOnce();
+    expect(
+      warningSpy.mock.calls.some(([msg]) =>
+        String(msg).includes('test-org/unlisted-repo'),
+      ),
+    ).toBe(true);
   });
 });

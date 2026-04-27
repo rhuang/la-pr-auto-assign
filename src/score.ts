@@ -17,13 +17,16 @@ import type {
  *   3. Alphabetical (lowercase) login.
  */
 export function scoreCandidates(input: ScoreInput): ScoredCandidate[] {
-  const { config, prAuthor, vertical, committers, load } = input;
+  const { config, prAuthor, vertical, committers, load, eligibleLogins } = input;
   const weights = config.assignment.weights;
 
   const verticalReviewers =
     vertical !== null ? config.verticals[vertical].reviewers : [];
 
-  const pool = config.whitelist.filter((login) => login !== prAuthor);
+  const eligibleSet = eligibleLogins ? new Set(eligibleLogins) : null;
+  const pool = config.whitelist.filter(
+    (login) => login !== prAuthor && (eligibleSet === null || eligibleSet.has(login)),
+  );
 
   const scored: ScoredCandidate[] = pool.map((login) => {
     const inVertical = vertical !== null && verticalReviewers.includes(login);
