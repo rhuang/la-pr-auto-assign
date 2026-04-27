@@ -11,10 +11,11 @@ const QUALIFIERS: readonly LoadQualifier[] = ['review-requested', 'reviewed-by']
 /**
  * Computes per-user review load across `loadRepos` over the last `windowDays` days.
  *
- * Each `LoadRepo` carries its own user whitelist — a user only contributes load
- * from repos where they're listed. This lets FE-only reviewers skip BE repos
- * (and vice versa) instead of getting credited for activity in repos they never
- * review.
+ * Each `LoadRepo` carries its own user list — a user only contributes load
+ * from repos where they're listed. The same list is used at scoring time to
+ * gate eligibility (see `eligibleLogins` in score.ts), so a user not listed
+ * for a given repo can neither be assigned PRs there nor be credited with
+ * load from it.
  *
  * For each user in `whitelist`, builds the per-user repo subset, then issues
  * two Search API calls — one per qualifier — and sums their `total_count`s:

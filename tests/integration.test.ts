@@ -346,4 +346,55 @@ describe('integration: run()', () => {
 
     expect(mocks.mockSearch).toHaveBeenCalledTimes(ALL_WHITELIST.length * 2);
   });
+
+  it('restricts candidates to current repo\'s load_repos[].users list', async () => {
+    // Only prof-c and prof-d are listed for repo-a; prof-a/prof-b should be skipped
+    // even though they're Professional reviewers in the whitelist.
+    const REPO_A_USERS = ['prof-c', 'prof-d'];
+    const scopedYaml = `
+verticals:
+  Professional:
+    reviewers:
+${PROFESSIONAL_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
+  Client:
+    reviewers:
+${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
+  Designer:
+    reviewers:
+${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
+load_repos:
+  - repo: test-org/repo-a
+    users:
+${REPO_A_USERS.map((u) => `      - ${u}`).join('\n')}
+  - repo: test-org/repo-b
+    users:
+${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+`;
+    mocks.mockGetContent.mockResolvedValue({
+      data: { type: 'file', encoding: 'base64', content: b64(scopedYaml) },
+    });
+
+    const { run } = await import('../src/index');
+    await run();
+
+    const call = mocks.mockRequestReviewers.mock.calls[0][0];
+    expect(REPO_A_USERS).toContain(call.reviewers[0]);
+  });
+
+  it('warns and falls back to full whitelist when current repo not in load_repos', async () => {
+    mocks.mockContext.repo = { owner: 'test-org', repo: 'unlisted-repo' };
+
+    const core = await import('@actions/core');
+    const warningSpy = vi.mocked(core.warning);
+
+    const { run } = await import('../src/index');
+    await run();
+
+    expect(mocks.mockRequestReviewers).toHaveBeenCalledOnce();
+    expect(
+      warningSpy.mock.calls.some(([msg]) =>
+        String(msg).includes('test-org/unlisted-repo'),
+      ),
+    ).toBe(true);
+  });
 });

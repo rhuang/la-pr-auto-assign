@@ -217,6 +217,44 @@ describe('scoreCandidates', () => {
     const scored = scoreCandidates(input);
     expect(scored).toHaveLength(3);
   });
+
+  it('restricts the pool to eligibleLogins when provided', () => {
+    const input = makeInput({
+      config: makeConfig({ whitelist: ['alice', 'bob', 'carol', 'dave'] }),
+      prAuthor: 'external',
+      vertical: 'Professional',
+      committers: {},
+      load: {},
+      eligibleLogins: ['alice', 'carol'],
+    });
+    const scored = scoreCandidates(input);
+    expect(scored.map((c) => c.login).sort()).toEqual(['alice', 'carol']);
+  });
+
+  it('uses the full whitelist when eligibleLogins is omitted', () => {
+    const input = makeInput({
+      config: makeConfig({ whitelist: ['alice', 'bob', 'carol'] }),
+      prAuthor: 'external',
+      vertical: 'Professional',
+      committers: {},
+      load: {},
+    });
+    const scored = scoreCandidates(input);
+    expect(scored.map((c) => c.login).sort()).toEqual(['alice', 'bob', 'carol']);
+  });
+
+  it('still excludes the PR author when eligibleLogins includes them', () => {
+    const input = makeInput({
+      config: makeConfig({ whitelist: ['alice', 'bob', 'carol'] }),
+      prAuthor: 'alice',
+      vertical: 'Professional',
+      committers: {},
+      load: {},
+      eligibleLogins: ['alice', 'bob'],
+    });
+    const scored = scoreCandidates(input);
+    expect(scored.map((c) => c.login)).toEqual(['bob']);
+  });
 });
 
 describe('pickReviewers', () => {

@@ -37,9 +37,11 @@ ignore_authors:
   - placeholder-bot-user
 
 load_repos:
-  # Each repo carries its own user list — load is only counted from repos a
-  # given reviewer is listed under. Use this to keep FE-only reviewers from
-  # being credited for BE activity (and vice versa).
+  # Each repo carries its own user list. The list does double duty:
+  #  - eligibility: only listed users can be auto-assigned PRs in that repo
+  #  - load-counting: only listed users have their load counted from that repo
+  # Reviewers not listed for a repo are skipped entirely there. Use this to keep
+  # FE-only reviewers off BE repos (and vice versa).
   - repo: owner/consumer-repo-a
     users:
       - placeholder-user-1

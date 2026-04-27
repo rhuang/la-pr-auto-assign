@@ -124,6 +124,22 @@ export async function run(): Promise<void> {
       `PR #${prContext.number} by @${prContext.author}: ${prContext.changedFiles.length} files changed, linkedIssue=${linkedRef}`,
     );
 
+    const currentRepoSpec = `${prContext.owner}/${prContext.repo}`;
+    const currentRepoEntry = config.assignment.load_repos.find(
+      (lr) => lr.repo === currentRepoSpec,
+    );
+    let eligibleLogins: string[] | undefined;
+    if (currentRepoEntry) {
+      eligibleLogins = currentRepoEntry.users;
+      core.info(
+        `Eligible reviewers for ${currentRepoSpec}: ${eligibleLogins.join(', ')}`,
+      );
+    } else {
+      core.warning(
+        `Current repo ${currentRepoSpec} is not listed in load_repos; falling back to full whitelist for eligibility.`,
+      );
+    }
+
     const [vertical, committers, load] = await Promise.all([
       classifyVertical(anthropicApiKey, prContext),
       getRecentCommitters(readOctokit, {
@@ -143,6 +159,7 @@ export async function run(): Promise<void> {
       vertical,
       committers,
       load,
+      eligibleLogins,
     });
 
     logScoreBreakdown(decision);

@@ -40324,6 +40324,16 @@ async function run() {
             ? `${prContext.linkedIssue.ref.owner}/${prContext.linkedIssue.ref.repo}#${prContext.linkedIssue.ref.number}`
             : 'none';
         core.info(`PR #${prContext.number} by @${prContext.author}: ${prContext.changedFiles.length} files changed, linkedIssue=${linkedRef}`);
+        const currentRepoSpec = `${prContext.owner}/${prContext.repo}`;
+        const currentRepoEntry = config.assignment.load_repos.find((lr) => lr.repo === currentRepoSpec);
+        let eligibleLogins;
+        if (currentRepoEntry) {
+            eligibleLogins = currentRepoEntry.users;
+            core.info(`Eligible reviewers for ${currentRepoSpec}: ${eligibleLogins.join(', ')}`);
+        }
+        else {
+            core.warning(`Current repo ${currentRepoSpec} is not listed in load_repos; falling back to full whitelist for eligibility.`);
+        }
         const [vertical, committers, load] = await Promise.all([
             (0, vertical_1.classifyVertical)(anthropicApiKey, prContext),
             (0, committers_1.getRecentCommitters)(readOctokit, {
@@ -40342,6 +40352,7 @@ async function run() {
             vertical,
             committers,
             load,
+            eligibleLogins,
         });
         logScoreBreakdown(decision);
         if (decision.chosen.length === 0) {
@@ -40410,10 +40421,11 @@ const QUALIFIERS = ['review-requested', 'reviewed-by'];
 /**
  * Computes per-user review load across `loadRepos` over the last `windowDays` days.
  *
- * Each `LoadRepo` carries its own user whitelist — a user only contributes load
- * from repos where they're listed. This lets FE-only reviewers skip BE repos
- * (and vice versa) instead of getting credited for activity in repos they never
- * review.
+ * Each `LoadRepo` carries its own user list — a user only contributes load
+ * from repos where they're listed. The same list is used at scoring time to
+ * gate eligibility (see `eligibleLogins` in score.ts), so a user not listed
+ * for a given repo can neither be assigned PRs there nor be credited with
+ * load from it.
  *
  * For each user in `whitelist`, builds the per-user repo subset, then issues
  * two Search API calls — one per qualifier — and sums their `total_count`s:
@@ -40683,10 +40695,11 @@ exports.pickReviewers = pickReviewers;
  *   3. Alphabetical (lowercase) login.
  */
 function scoreCandidates(input) {
-    const { config, prAuthor, vertical, committers, load } = input;
+    const { config, prAuthor, vertical, committers, load, eligibleLogins } = input;
     const weights = config.assignment.weights;
     const verticalReviewers = vertical !== null ? config.verticals[vertical].reviewers : [];
-    const pool = config.whitelist.filter((login) => login !== prAuthor);
+    const eligibleSet = eligibleLogins ? new Set(eligibleLogins) : null;
+    const pool = config.whitelist.filter((login) => login !== prAuthor && (eligibleSet === null || eligibleSet.has(login)));
     const scored = pool.map((login) => {
         const inVertical = vertical !== null && verticalReviewers.includes(login);
         const committerFileCount = vertical !== null ? committers[login] ?? 0 : 0;
