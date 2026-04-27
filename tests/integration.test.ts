@@ -124,7 +124,10 @@ const CLIENT_REVIEWERS = [
 ];
 const ALL_WHITELIST = [...PROFESSIONAL_REVIEWERS, ...CLIENT_REVIEWERS];
 
-const CONFIG_YAML = `
+function makeConfigYaml(opts: { repoAUsers?: string[]; repoBUsers?: string[] } = {}): string {
+  const repoAUsers = opts.repoAUsers ?? ALL_WHITELIST;
+  const repoBUsers = opts.repoBUsers ?? ALL_WHITELIST;
+  return `
 verticals:
   Professional:
     reviewers:
@@ -138,11 +141,14 @@ ${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
 load_repos:
   - repo: test-org/repo-a
     users:
-${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+${repoAUsers.map((u) => `      - ${u}`).join('\n')}
   - repo: test-org/repo-b
     users:
-${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
+${repoBUsers.map((u) => `      - ${u}`).join('\n')}
 `;
+}
+
+const CONFIG_YAML = makeConfigYaml();
 
 function b64(s: string): string {
   return Buffer.from(s, 'utf8').toString('base64');
@@ -348,30 +354,13 @@ describe('integration: run()', () => {
   });
 
   it('restricts candidates to current repo\'s load_repos[].users list', async () => {
-    // Only prof-c and prof-d are listed for repo-a; prof-a/prof-b should be skipped
-    // even though they're Professional reviewers in the whitelist.
     const REPO_A_USERS = ['prof-c', 'prof-d'];
-    const scopedYaml = `
-verticals:
-  Professional:
-    reviewers:
-${PROFESSIONAL_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
-  Client:
-    reviewers:
-${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
-  Designer:
-    reviewers:
-${CLIENT_REVIEWERS.map((u) => `      - ${u}`).join('\n')}
-load_repos:
-  - repo: test-org/repo-a
-    users:
-${REPO_A_USERS.map((u) => `      - ${u}`).join('\n')}
-  - repo: test-org/repo-b
-    users:
-${ALL_WHITELIST.map((u) => `      - ${u}`).join('\n')}
-`;
     mocks.mockGetContent.mockResolvedValue({
-      data: { type: 'file', encoding: 'base64', content: b64(scopedYaml) },
+      data: {
+        type: 'file',
+        encoding: 'base64',
+        content: b64(makeConfigYaml({ repoAUsers: REPO_A_USERS })),
+      },
     });
 
     const { run } = await import('../src/index');

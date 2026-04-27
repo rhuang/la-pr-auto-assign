@@ -40303,10 +40303,19 @@ async function run() {
             ref: configRef,
         });
         const config = (0, config_1.parseConfig)(configYaml);
+        const currentRepoSpec = `${ctx.repo.owner}/${ctx.repo.repo}`;
+        const eligibleLogins = config.assignment.load_repos.find((lr) => lr.repo === currentRepoSpec)?.users;
+        if (eligibleLogins) {
+            core.info(`Eligible reviewers for ${currentRepoSpec}: ${eligibleLogins.join(', ')}`);
+        }
+        else {
+            core.warning(`Current repo ${currentRepoSpec} is not listed in load_repos; falling back to full whitelist for eligibility.`);
+        }
         // Load-map search has no PR-context dependency, so kick it off as soon as config
-        // is parsed and let it race the PR / file fetches.
+        // is parsed and let it race the PR / file fetches. Narrowing to eligibleLogins
+        // (when known) saves Search API calls for users who can't be picked anyway.
         const loadPromise = (0, load_1.getLoadMap)(readOctokit, {
-            whitelist: config.whitelist,
+            whitelist: eligibleLogins ?? config.whitelist,
             loadRepos: config.assignment.load_repos,
             windowDays: config.assignment.load_window_days,
         });
@@ -40324,16 +40333,6 @@ async function run() {
             ? `${prContext.linkedIssue.ref.owner}/${prContext.linkedIssue.ref.repo}#${prContext.linkedIssue.ref.number}`
             : 'none';
         core.info(`PR #${prContext.number} by @${prContext.author}: ${prContext.changedFiles.length} files changed, linkedIssue=${linkedRef}`);
-        const currentRepoSpec = `${prContext.owner}/${prContext.repo}`;
-        const currentRepoEntry = config.assignment.load_repos.find((lr) => lr.repo === currentRepoSpec);
-        let eligibleLogins;
-        if (currentRepoEntry) {
-            eligibleLogins = currentRepoEntry.users;
-            core.info(`Eligible reviewers for ${currentRepoSpec}: ${eligibleLogins.join(', ')}`);
-        }
-        else {
-            core.warning(`Current repo ${currentRepoSpec} is not listed in load_repos; falling back to full whitelist for eligibility.`);
-        }
         const [vertical, committers, load] = await Promise.all([
             (0, vertical_1.classifyVertical)(anthropicApiKey, prContext),
             (0, committers_1.getRecentCommitters)(readOctokit, {
